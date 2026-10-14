@@ -20,12 +20,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from livekit.agents import (  # noqa: E402
     Agent, AgentServer, AgentSession, CloseEvent, JobContext, JobProcess, RunContext,
-    UserStateChangedEvent, cli, function_tool, inference,
+    UserStateChangedEvent, cli, function_tool, inference, llm,
 )
 from livekit.plugins import silero  # noqa: E402
 
 from qualifier import faq, guardrails, storage  # noqa: E402
 from qualifier.config import AGENT_NAME, DISCLOSURE, OUT_OF_SCOPE, QUESTIONS  # noqa: E402
+from typing import Literal  # noqa: E402
+
+from pydantic import BaseModel  # noqa: E402
+
+from qualifier.extraction import LLM_PROMPT, transcript_text, validate  # noqa: E402
 from qualifier.pipeline import finalize  # noqa: E402
 
 log = logging.getLogger("lead-qualifier")
@@ -87,6 +92,7 @@ class CallState:
         self.utm = utm
         self.started = time.time()
         self.conversation_id: str | None = None
+        self.finalize_task: asyncio.Future | None = None
         self.away_prompted = False
         self.ending = False
 
@@ -101,18 +107,69 @@ def transcript_of(session: AgentSession) -> list[dict]:
     return out
 
 
-async def finalize_call(state: CallState, session: AgentSession, end_reason: str) -> dict | None:
-    """Extract, score, persist, and push the result card to the browser. Idempotent."""
-    if state.conversation_id:
+EXTRACT_MODEL = os.environ.get("EXTRACTION_MODEL_INFERENCE", "openai/gpt-4.1-mini")
+
+
+class LeadFields(BaseModel):
+    """Structured-output schema; mirrors qualifier.extraction.FIELD_VALUES."""
+
+    use_case: Literal["production", "pilot", "curiosity"] | None
+    use_case_detail: str | None
+    company_size_band: Literal["1-10", "11-49", "50-199", "200+"] | None
+    timeline: Literal["under_1_month", "1_3_months", "3_6_months", "exploring"] | None
+    current_stack: Literal["vendor", "in_house", "from_zero"] | None
+    role_type: Literal["decision_maker", "practitioner", "unknown"] | None
+
+
+async def extract_with_inference(transcript: list[dict]) -> tuple[dict, str] | None:
+    """Read the answers with an LLM via LiveKit Inference (billed to the LiveKit
+    project, no OpenAI key needed). Returns None on any failure so the caller
+    falls back to the default extractor."""
+    if not any(t["role"] == "user" for t in transcript):
         return None
+    try:
+        ctx = llm.ChatContext.empty()
+        ctx.add_message(role="system", content=LLM_PROMPT)
+        ctx.add_message(role="user", content=transcript_text(transcript))
+        text = ""
+        model = inference.LLM(EXTRACT_MODEL)
+        async with model.chat(
+            chat_ctx=ctx, response_format=LeadFields
+        ) as stream:
+            async for chunk in stream:
+                if chunk.delta and chunk.delta.content:
+                    text += chunk.delta.content
+        return validate(json.loads(text)), "llm"
+    except Exception:
+        log.exception("inference extraction failed; falling back to the default extractor")
+        return None
+
+
+async def finalize_call(state: CallState, session: AgentSession, end_reason: str) -> dict | None:
+    """Extract, score, persist, and push the result card to the browser.
+
+    Runs once per call. Later callers (e.g. the hang-up handler) wait for that
+    same run to finish and get None.
+    """
+    if state.finalize_task is None:
+        state.finalize_task = asyncio.ensure_future(_finalize(state, session, end_reason))
+        return await state.finalize_task
+    await state.finalize_task
+    return None
+
+
+async def _finalize(state: CallState, session: AgentSession, end_reason: str) -> dict:
+    transcript = transcript_of(session)
+    extracted = await extract_with_inference(transcript)
     result = await asyncio.to_thread(
         finalize,
-        transcript_of(session),
+        transcript,
         channel="voice",
         utm=state.utm,
         duration_seconds=int(time.time() - state.started),
         room_name=state.ctx.room.name,
         end_reason=end_reason,
+        extracted=extracted,
     )
     state.conversation_id = result["id"]
     try:

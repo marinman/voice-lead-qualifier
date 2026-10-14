@@ -48,12 +48,12 @@ function showResult(rec) {
   gotResult = true;
   setAgentState("idle");
   const v = $("view-result");
-  v.innerHTML = renderResult(rec, config.tiers) +
+  v.innerHTML = renderVisitorResult(rec) +
     `<details><summary>Show transcript</summary><div class="transcript">${renderTranscript(rec.transcript)}</div></details>` +
     `<div class="controls"><button class="btn" id="restart-btn">Start over</button></div>`;
   $("restart-btn").onclick = () => location.reload();
   show("result");
-  setStatus(rec.tier ? `${rec.tier} lead` : "Saved for review");
+  setStatus("Complete");
 }
 
 // ---- voice -----------------------------------------------------------------
@@ -107,6 +107,7 @@ async function startVoice() {
     const state = changed["lk.agent.state"];
     if (!state || p === room.localParticipant) return;
     setAgentState(state);
+    if (gotResult) return; // keep "Complete" while the agent says its closing line
     setStatus({ listening: "Listening", thinking: "Thinking", speaking: "Speaking", initializing: "Agent joining" }[state] || state, true);
   });
   room.on(LK.RoomEvent.Disconnected, () => {

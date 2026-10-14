@@ -64,6 +64,16 @@ function renderResult(rec, tiers, opts = {}) {
     </div>`;
 }
 
+// What a visitor sees after their own assessment: the recommended next step only.
+// Score, tier, and the rubric breakdown are internal (reviewer mode + dashboard).
+function renderVisitorResult(rec) {
+  return `<div class="result">
+      <div class="eyebrow" style="font-size:11px;margin-bottom:10px">Your next step</div>
+      ${renderNextStep(rec)}
+      <div class="small" style="margin-top:12px">Thanks for taking the assessment.</div>
+    </div>`;
+}
+
 // Email capture on nurture outcomes (event delegation, works for any rendered card).
 document.addEventListener("submit", async (e) => {
   const form = e.target.closest(".email-form");

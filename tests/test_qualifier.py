@@ -219,3 +219,27 @@ def test_turso_backend_end_to_end(client, monkeypatch, tmp_path):
     assert stats["total"] == 2 and stats["nurture_emails"] == 1 and stats["sessions_today"] == 1
     assert seen["url"] == "https://vlq-demo.turso.io/v2/pipeline" and seen["auth"] == "Bearer tok"
     assert fake.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 2
+
+
+def test_rules_handle_answers_seen_in_real_calls():
+    q = dict(config.QUESTIONS)
+    t = [
+        {"role": "assistant", "text": q["use_case"]},
+        {"role": "user", "text": "I wanna insert VoiceAI into my consumer finance app."},
+        {"role": "assistant", "text": q["company_size_band"]},
+        {"role": "user", "text": "Two thousand."},
+        {"role": "assistant", "text": q["timeline"]},
+        {"role": "user", "text": "Tomorrow."},
+        {"role": "assistant", "text": q["current_stack"]},
+        {"role": "user", "text": "Starting from zero for the voice part."},
+        {"role": "assistant", "text": q["role_type"]},
+        {"role": "user", "text": "I'm doing everything. I'm gonna vibe code it."},
+    ]
+    f = extract_rules(t)
+    assert f["use_case"] == "production" and f["company_size_band"] == "200+"
+    assert f["timeline"] == "under_1_month" and f["role_type"] == "decision_maker"
+
+
+def test_visitor_never_gets_score_markup():
+    js = (config.ROOT / "web/static/app.js").read_text()
+    assert "v.innerHTML = renderVisitorResult(rec)" in js

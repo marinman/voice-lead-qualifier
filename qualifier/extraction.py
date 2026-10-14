@@ -153,7 +153,8 @@ def classify_use_case(t: str):
         return "curiosity"
     if _has(t, ("pilot", "prototype", "poc", "proof of concept", "experiment", "mvp", "trial", "test it", "see if")):
         return "pilot"
-    if _has(t, ("production", "ship", "launch", "real callers", "customers", "at scale", "replace our", "rollout", "roll out")):
+    if _has(t, ("production", "ship", "launch", "real callers", "customers", "at scale", "replace our", "rollout", "roll out",
+                "into my", "into our", "integrate", "insert", "add voice", "our app", "my app", "our product", "our users", "my users")):
         return "production"
     return None
 
@@ -179,7 +180,8 @@ def classify_size(t: str, mapped: bool):
 def classify_timeline(t: str):
     if _has(t, ("no timeline", "no real timeline", "not sure", "someday", "next year", "no rush", "just exploring", "exploring")):
         return "exploring"
-    if _has(t, ("asap", "this week", "next week", "this month", "within the month", "few weeks", "couple weeks", "days", "immediately", "yesterday")):
+    if _has(t, ("asap", "this week", "next week", "this month", "within the month", "few weeks", "couple weeks", "days", "immediately", "yesterday",
+                "tomorrow", "today", "right now", "right away", "already live")):
         return "under_1_month"
     m = re.search(r"([\w.]+)(?:\s*(?:or|to|-)\s*([\w.]+))?\s+(weeks?|months?)", t)
     if m:
@@ -212,7 +214,8 @@ def classify_stack(t: str):
 
 
 def classify_role(t: str, mapped: bool):
-    if _has(t, ("ceo", "cto", "cpo", "coo", "chief", "founder", "co-founder", "vp", "vice president", "head of", "director", "owner", "president", "budget", "gm ")):
+    if _has(t, ("ceo", "cto", "cpo", "coo", "chief", "founder", "co-founder", "vp", "vice president", "head of", "director", "owner", "president", "budget", "gm ",
+                "doing everything", "do everything", "solo", "just me", "i run", "my own company", "my company")):
         return "decision_maker"
     if _has(t, ("engineer", "developer", "dev ", "programmer", "product manager", "pm ", "designer", "architect", "scientist", "write the code", "analyst", "tech lead", "student", "manager")):
         return "practitioner"
@@ -244,6 +247,8 @@ def extract_rules(transcript: list[dict]) -> dict:
     for field, fn in CLASSIFIERS.items():
         if field in answers:
             out[field] = fn(" " + answers[field] + " ", True)
+    if out["use_case"] is None and len(answers.get("use_case", "").split()) >= 4:
+        out["use_case"] = "pilot"
     # Second pass: pick up answers volunteered out of order.
     for turn in transcript:
         if turn["role"] != "user":

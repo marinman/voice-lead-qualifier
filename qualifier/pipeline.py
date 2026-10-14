@@ -75,7 +75,10 @@ def finalize(
     room_name: str | None = None,
     end_reason: str = "completed",
     conversation_id: str | None = None,
+    extracted: tuple[dict, str] | None = None,
 ) -> dict:
+    """extracted: optional (fields, method) produced by the caller, e.g. the voice
+    agent's own LLM. When omitted, the default extractor runs."""
     transcript = [t for t in transcript if t.get("text", "").strip()]
     rec: dict = {
         "channel": channel,
@@ -89,7 +92,7 @@ def finalize(
         rec["id"] = conversation_id
 
     try:
-        fields, method = extract(transcript)
+        fields, method = extracted if extracted else extract(transcript)
     except ExtractionError as e:
         log.warning("extraction failed, saving for review: %s", e)
         rec.update(
