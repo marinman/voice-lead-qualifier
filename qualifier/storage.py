@@ -149,9 +149,18 @@ class TursoDB:
 _initialized: set[str] = set()
 
 
+def _env(name: str) -> str:
+    # Tolerate values pasted into a host's settings with stray spaces or quotes.
+    return os.environ.get(name, "").strip().strip("'\"").strip()
+
+
+def backend() -> str:
+    return "turso" if _env("TURSO_DATABASE_URL") else "sqlite"
+
+
 def _db():
-    url = os.environ.get("TURSO_DATABASE_URL")
-    db = TursoDB(url, os.environ.get("TURSO_AUTH_TOKEN", "")) if url else SQLiteDB(DB_PATH)
+    url = _env("TURSO_DATABASE_URL")
+    db = TursoDB(url, _env("TURSO_AUTH_TOKEN")) if url else SQLiteDB(DB_PATH)
     key = url or str(DB_PATH)
     if key not in _initialized:
         db.run([(s, []) for s in SCHEMA])

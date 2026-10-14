@@ -96,8 +96,19 @@ def dashboard(token: str):
 
 
 @app.get("/healthz")
-def healthz():
-    return {"ok": True}
+def healthz(deep: bool = False):
+    if not deep:
+        return {"ok": True}
+    # Deep check: can we reach the database? Reports the error type, never secrets.
+    try:
+        storage.query("SELECT 1 AS one")
+        return {"ok": True, "db": storage.backend()}
+    except Exception as e:
+        status = getattr(getattr(e, "response", None), "status_code", None)
+        return JSONResponse(
+            {"ok": False, "db": storage.backend(), "error": type(e).__name__, "http_status": status},
+            status_code=503,
+        )
 
 
 # ------------------------------------------------------------------------- api
