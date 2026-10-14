@@ -1,4 +1,7 @@
 const $ = (id) => document.getElementById(id);
+// The dashboard lives at /dashboard/<DASHBOARD_TOKEN>; the API wants the same token as a header.
+const TOKEN = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+const api = (path) => fetch(path, { headers: { "X-Dashboard-Token": TOKEN } }).then((r) => r.json());
 let tiers = { hot: 70, warm: 40 };
 
 const pct = (x) => `${Math.round(x * 100)}%`;
@@ -10,10 +13,10 @@ function tile(k, v, s = "") {
 }
 
 async function load() {
-  const data = await (await fetch(`/api/conversations?include_samples=${$("samples").checked}`)).json();
+  const data = await api(`/api/conversations?include_samples=${$("samples").checked}`);
   const s = data.stats;
   $("tiles").innerHTML =
-    tile("Conversations", s.total, `${s.incomplete} incomplete · ${s.needs_review} need review`) +
+    tile("Conversations", s.total, `${s.incomplete} incomplete · ${s.needs_review} need review · today ${s.sessions_today}/${s.max_sessions_per_day} live${s.demo_enabled ? "" : " · PAUSED"}`) +
     tile("Hot", s.hot, `score ≥ ${tiers.hot}`) +
     tile("Warm", s.warm, `${s.nurture_emails} nurture emails captured`) +
     tile("Hot rate", pct(s.hot_rate), "of scored conversations") +
@@ -36,7 +39,7 @@ async function load() {
 }
 
 async function openDetail(id) {
-  const rec = await (await fetch(`/api/conversations/${id}`)).json();
+  const rec = await api(`/api/conversations/${id}`);
   const utm = [rec.utm_source, rec.utm_medium, rec.utm_campaign].filter(Boolean).join(" / ");
   $("drawer").innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:start">

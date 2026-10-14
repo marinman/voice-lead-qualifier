@@ -10,7 +10,7 @@
   <div class="wrap">
     <nav class="nav">
       <div class="brand"><span class="brand-mark"></span>Voice AI Readiness</div>
-      <a href="/dashboard">Funnel dashboard →</a>
+      <a href="#reviewer">Reviewer mode ↓</a>
     </nav>
 
     <section class="hero">
@@ -34,10 +34,11 @@
 
         <div id="view-idle" class="idle">
           <button class="orb" id="talk-btn">Talk</button>
-          <div class="small">Tap to start. We'll ask for mic access.</div>
+          <div class="small">Tap to start. We'll ask for mic access. Calls end after <span id="max-min">5</span> minutes.</div>
           <div id="voice-note" class="note" hidden>
             <b>Voice not configured.</b> LiveKit keys are missing from <code>.env</code>, so the live voice agent is off. The text chat and reviewer mode below still run the full scoring and routing.
           </div>
+          <div id="limit-note" class="note" hidden></div>
           <div class="small">Prefer typing? <button class="linkbtn" id="text-btn">Use text chat</button></div>
         </div>
 

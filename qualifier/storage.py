@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS conversations (
     end_reason TEXT                     -- completed | visitor_stopped | silence | disconnected
 );
 CREATE INDEX IF NOT EXISTS idx_conv_room ON conversations(room_name);
+CREATE TABLE IF NOT EXISTS usage (            -- session starts, for cost guardrails
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,                 -- voice | text | sample
+    ip_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_usage_day ON usage(created_at);
 CREATE TABLE IF NOT EXISTS nurture (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     conversation_id TEXT NOT NULL REFERENCES conversations(id),
@@ -50,6 +57,7 @@ def connect():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")  # web server and agent worker share this file
     try:
         conn.executescript(SCHEMA)
         yield conn

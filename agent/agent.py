@@ -24,7 +24,7 @@ from livekit.agents import (  # noqa: E402
 )
 from livekit.plugins import silero  # noqa: E402
 
-from qualifier import faq, storage  # noqa: E402
+from qualifier import faq, guardrails, storage  # noqa: E402
 from qualifier.config import AGENT_NAME, DISCLOSURE, OUT_OF_SCOPE, QUESTIONS  # noqa: E402
 from qualifier.pipeline import finalize  # noqa: E402
 
@@ -155,7 +155,9 @@ class Qualifier(Agent):
         return 'Say only: "No problem, ending here. Thanks for your time."'
 
 
-server = AgentServer()
+# One small VM hosts web + agent, so keep warm worker processes low
+# (the framework's production default is 12).
+server = AgentServer(num_idle_processes=int(os.environ.get("AGENT_IDLE_PROCESSES", "1")))
 
 
 def prewarm(proc: JobProcess) -> None:
@@ -220,6 +222,23 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.shutdown(reason=ev.reason.value if ev.reason else "closed")
 
     await session.start(agent=Qualifier(state), room=ctx.room)
+
+    # Hard cap on call length (public demo link): wrap up and save what we have.
+    async def _time_limit() -> None:
+        await asyncio.sleep(guardrails.max_session_seconds())
+        if state.ending:
+            return
+        state.ending = True
+        await finalize_call(state, session, "time_limit")
+        await session.say("We've hit the time limit for this demo, so I'll wrap up here. Your next step is on screen. Thanks!")
+        session.shutdown()
+
+    timer = asyncio.create_task(_time_limit())
+
+    async def _cancel_timer() -> None:
+        timer.cancel()
+
+    ctx.add_shutdown_callback(_cancel_timer)
 
 
 if __name__ == "__main__":

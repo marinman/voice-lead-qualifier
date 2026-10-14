@@ -7,7 +7,7 @@ import re
 import time
 import uuid
 
-from . import faq, storage
+from . import faq, guardrails, storage
 from .config import DISCLOSURE, QUESTIONS
 from .pipeline import finalize
 
@@ -17,7 +17,19 @@ STOP = re.compile(r"^\s*(stop|quit|end|cancel|exit|bye|goodbye|not interested|no
 _sessions: dict[str, dict] = {}
 
 
+def _sweep() -> None:
+    """Save chats the visitor walked away from (partial record), and free memory."""
+    cutoff = time.time() - 2 * guardrails.max_session_seconds()
+    for sid, s in list(_sessions.items()):
+        if s["started"] < cutoff:
+            if any(t["role"] == "user" for t in s["transcript"]):
+                _finish(sid, s, "abandoned", "")
+            else:
+                _sessions.pop(sid, None)
+
+
 def start(utm: dict | None) -> dict:
+    _sweep()
     sid = uuid.uuid4().hex[:12]
     first = f"{DISCLOSURE} {QUESTIONS[0][1]}"
     _sessions[sid] = {"step": 0, "utm": utm or {}, "started": time.time(), "transcript": [
@@ -35,8 +47,9 @@ def _finish(sid: str, s: dict, end_reason: str, closing: str | None) -> dict:
         end_reason=end_reason,
         conversation_id=sid,
     )
-    line = closing or result["next_step"]["agent_line"]
-    s["transcript"].append({"role": "assistant", "text": line})
+    line = result["next_step"]["agent_line"] if closing is None else closing
+    if line:
+        s["transcript"].append({"role": "assistant", "text": line})
     storage.update_transcript(sid, s["transcript"])
     _sessions.pop(sid, None)
     result["transcript"] = s["transcript"]
@@ -51,6 +64,9 @@ def message(sid: str, text: str) -> dict:
     if not text:
         return {"messages": [], "done": False}
     s["transcript"].append({"role": "user", "text": text})
+
+    if time.time() - s["started"] > guardrails.max_session_seconds():
+        return _finish(sid, s, "time_limit", "We've hit the time limit for this demo, so I'll wrap up here with what you've shared.")
 
     if STOP.search(text):
         return _finish(sid, s, "visitor_stopped", "No problem, ending here. Thanks for your time.")

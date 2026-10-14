@@ -9,20 +9,21 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import sys
 import uuid
 from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from qualifier import storage, textchat  # noqa: E402
+from qualifier import guardrails, storage, textchat  # noqa: E402
 from qualifier.config import (  # noqa: E402
     AGENT_NAME, FIXTURES_DIR, livekit_configured, load_scoring, openai_configured,
 )
@@ -31,6 +32,28 @@ from qualifier.pipeline import clean_utm, finalize, next_step  # noqa: E402
 STATIC = Path(__file__).resolve().parent / "static"
 app = FastAPI(title="Voice Lead Qualifier")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+
+@app.exception_handler(guardrails.GuardrailError)
+def guardrail_error(_: Request, e: guardrails.GuardrailError):
+    return JSONResponse({"detail": e.message}, status_code=e.status)
+
+
+def client_ip(request: Request) -> str:
+    # Fly.io sets Fly-Client-IP; other proxies set X-Forwarded-For.
+    fwd = request.headers.get("fly-client-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
+    return fwd.strip() or (request.client.host if request.client else "unknown")
+
+
+def dashboard_token_ok(token: str | None) -> bool:
+    expected = os.environ.get("DASHBOARD_TOKEN", "")
+    return bool(expected) and bool(token) and secrets.compare_digest(token, expected)
+
+
+def require_dashboard(x_dashboard_token: str | None = Header(default=None)) -> None:
+    """Transcripts are only served to callers holding DASHBOARD_TOKEN."""
+    if not dashboard_token_ok(x_dashboard_token):
+        raise HTTPException(404, "not found")
 
 
 class UTM(BaseModel):
@@ -64,9 +87,17 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
-@app.get("/dashboard")
-def dashboard():
-    return FileResponse(STATIC / "dashboard.html")
+@app.get("/dashboard/{token}")
+def dashboard(token: str):
+    # Unguessable token in the path (DASHBOARD_TOKEN). Anything else is a plain 404.
+    if not dashboard_token_ok(token):
+        raise HTTPException(404, "not found")
+    return FileResponse(STATIC / "dashboard.html", headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"})
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------------- api
@@ -75,15 +106,18 @@ def dashboard():
 def get_config():
     return {
         "voice_configured": livekit_configured(),
+        "demo_enabled": guardrails.demo_enabled(),
+        "max_session_seconds": guardrails.max_session_seconds(),
         "extraction_method": "llm" if openai_configured() and os.environ.get("EXTRACTION_MODE") != "rules" else "rules",
         "tiers": load_scoring()["tiers"],
     }
 
 
 @app.post("/api/token")
-def mint_token(utm: UTM):
+def mint_token(utm: UTM, request: Request):
     if not livekit_configured():
         raise HTTPException(503, "Voice not configured: set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env")
+    guardrails.start_session("voice", client_ip(request))
     from livekit import api
 
     room = f"vlq-{uuid.uuid4().hex[:10]}"
@@ -93,10 +127,13 @@ def mint_token(utm: UTM):
         api.AccessToken(os.environ["LIVEKIT_API_KEY"], os.environ["LIVEKIT_API_SECRET"])
         .with_identity(identity)
         .with_name("Visitor")
-        .with_ttl(timedelta(minutes=15))
+        .with_ttl(timedelta(minutes=5))  # time to join; the agent enforces the call length
         .with_grants(api.VideoGrants(room_join=True, room=room))
         .with_room_config(
             api.RoomConfiguration(
+                max_participants=2,
+                empty_timeout=60,
+                departure_timeout=10,
                 agents=[api.RoomAgentDispatch(agent_name=AGENT_NAME, metadata=json.dumps(attribution))]
             )
         )
@@ -114,9 +151,10 @@ def room_result(room: str):
 
 
 @app.post("/api/samples/{persona}")
-def run_sample(persona: str):
+def run_sample(persona: str, request: Request):
     if not re.fullmatch(r"hot|warm|low", persona):
         raise HTTPException(404, "unknown persona")
+    guardrails.start_session("sample", client_ip(request))
     fx = json.loads((FIXTURES_DIR / f"{persona}.json").read_text())
     result = finalize(
         fx["transcript"], channel="sample", utm=fx.get("utm"), duration_seconds=fx.get("duration_seconds")
@@ -125,7 +163,8 @@ def run_sample(persona: str):
 
 
 @app.post("/api/text/start")
-def text_start(utm: UTM):
+def text_start(utm: UTM, request: Request):
+    guardrails.start_session("text", client_ip(request))
     return textchat.start(utm.model_dump())
 
 
@@ -151,7 +190,7 @@ def nurture(n: NurtureIn):
     return {"ok": True}
 
 
-@app.get("/api/conversations")
+@app.get("/api/conversations", dependencies=[Depends(require_dashboard)])
 def conversations(include_samples: bool = True):
     rows = storage.list_conversations(include_samples)
     scored = [r for r in rows if r["tier"]]
@@ -175,6 +214,9 @@ def conversations(include_samples: bool = True):
             "needs_review": sum(r["needs_review"] for r in rows),
             "incomplete": sum(r["incomplete"] for r in rows),
             "nurture_emails": storage.nurture_count(),
+            "sessions_today": guardrails.sessions_today(),
+            "max_sessions_per_day": guardrails.limits()["max_sessions_per_day"],
+            "demo_enabled": guardrails.demo_enabled(),
         },
         "by_source": [
             {"utm_source": s, "utm_campaign": c, **v,
@@ -190,7 +232,7 @@ def conversations(include_samples: bool = True):
     }
 
 
-@app.get("/api/conversations/{cid}")
+@app.get("/api/conversations/{cid}", dependencies=[Depends(require_dashboard)])
 def conversation(cid: str):
     rec = storage.get_conversation(cid)
     if rec is None:

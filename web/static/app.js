@@ -44,7 +44,7 @@ function showResult(rec) {
   const v = $("view-result");
   v.innerHTML = renderResult(rec, config.tiers) +
     `<details><summary>Show transcript</summary><div class="transcript">${renderTranscript(rec.transcript)}</div></details>` +
-    `<div class="controls"><button class="btn" id="restart-btn">Start over</button><a class="btn" href="/dashboard">See it on the dashboard →</a></div>`;
+    `<div class="controls"><button class="btn" id="restart-btn">Start over</button></div>`;
   $("restart-btn").onclick = () => location.reload();
   show("result");
   setStatus(rec.tier ? `${rec.tier} lead` : "Saved for review");
@@ -67,6 +67,9 @@ async function startVoice() {
   let tok;
   try {
     const res = await fetch("/api/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(utm) });
+    if (res.status === 429 || (res.status === 503 && config.voice_configured)) {
+      return showLimit((await res.json()).detail);
+    }
     if (!res.ok) throw new Error((await res.json()).detail);
     tok = await res.json();
   } catch (err) {
@@ -141,14 +144,23 @@ $("mute-btn").onclick = async () => {
 // ---- text fallback ---------------------------------------------------------
 let textSession = null;
 
+function showLimit(message) {
+  show("idle");
+  $("limit-note").textContent = message;
+  $("limit-note").hidden = false;
+  $("talk-btn").disabled = !config.voice_configured || !config.demo_enabled;
+  setStatus("Unavailable");
+}
+
 async function startText(notice) {
+  const res = await fetch("/api/text/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(utm) });
+  const data = await res.json();
+  if (!res.ok) return showLimit(data.detail || "The demo is unavailable right now.");
   show("live");
   $("chat-form").hidden = false;
   $("voice-controls").hidden = true;
   setStatus("Text chat", true);
   if (notice) addMsg("assistant", notice);
-  const res = await fetch("/api/text/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(utm) });
-  const data = await res.json();
   textSession = data.session_id;
   data.messages.forEach((m) => addMsg("assistant", m));
   $("chat-input").focus();
@@ -177,6 +189,10 @@ document.querySelectorAll("[data-persona]").forEach((btn) => {
     try {
       const res = await fetch(`/api/samples/${btn.dataset.persona}`, { method: "POST" });
       const rec = await res.json();
+      if (!res.ok) {
+        $("sample-result").innerHTML = `<div class="empty">${esc(rec.detail || "Something went wrong.")}</div>`;
+        return;
+      }
       $("sample-transcript").innerHTML =
         `<div class="card" style="padding:18px"><b>${esc(rec.persona)} persona</b><div class="small" style="margin:4px 0 12px">${esc(rec.persona_description)}</div>` +
         `<div class="transcript" style="max-height:420px">${renderTranscript(rec.transcript)}</div></div>`;
@@ -192,7 +208,14 @@ document.querySelectorAll("[data-persona]").forEach((btn) => {
   try {
     config = await (await fetch("/api/config")).json();
   } catch {}
-  if (!config.voice_configured) {
+  $("max-min").textContent = Math.round((config.max_session_seconds || 300) / 60);
+  if (config.demo_enabled === false) {
+    $("talk-btn").disabled = true;
+    $("text-btn").disabled = true;
+    $("limit-note").textContent = "The live demo is paused right now. Reviewer mode below still shows the full system.";
+    $("limit-note").hidden = false;
+    setStatus("Paused");
+  } else if (!config.voice_configured) {
     $("talk-btn").disabled = true;
     $("voice-note").hidden = false;
     setStatus("Voice off");
