@@ -150,8 +150,10 @@ _initialized: set[str] = set()
 
 
 def _env(name: str) -> str:
-    # Tolerate values pasted into a host's settings with stray spaces or quotes.
-    return os.environ.get(name, "").strip().strip("'\"").strip()
+    """Read a pasted secret defensively: drop surrounding quotes, a stray `NAME=`
+    prefix, and any whitespace or line breaks (URLs and tokens never contain any)."""
+    v = "".join(os.environ.get(name, "").split()).strip("'\"")
+    return v[len(name) + 1:] if v.startswith(name + "=") else v
 
 
 def backend() -> str:
