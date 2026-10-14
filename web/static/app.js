@@ -22,6 +22,11 @@ function setStatus(text, live = false) {
   $("dot").classList.toggle("live", live);
 }
 
+// Drives the bar visualizer: idle | listening | thinking | speaking.
+function setAgentState(state) {
+  $("widget").dataset.state = state;
+}
+
 function show(view) {
   for (const v of ["idle", "live", "result"]) $(`view-${v}`).hidden = v !== view;
 }
@@ -41,6 +46,7 @@ function addMsg(role, text, id) {
 
 function showResult(rec) {
   gotResult = true;
+  setAgentState("idle");
   const v = $("view-result");
   v.innerHTML = renderResult(rec, config.tiers) +
     `<details><summary>Show transcript</summary><div class="transcript">${renderTranscript(rec.transcript)}</div></details>` +
@@ -53,7 +59,7 @@ function showResult(rec) {
 // ---- voice -----------------------------------------------------------------
 async function startVoice() {
   $("talk-btn").disabled = true;
-  setStatus("Checking microphone…");
+  setStatus("Checking mic");
 
   // Ask for the mic before creating a room, so a denial costs nothing and falls back to text.
   try {
@@ -63,7 +69,7 @@ async function startVoice() {
     return startText(`Couldn't use your microphone (${err.name}). Switched to text chat: same five questions, same scoring.`);
   }
 
-  setStatus("Connecting…");
+  setStatus("Connecting");
   let tok;
   try {
     const res = await fetch("/api/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(utm) });
@@ -80,6 +86,7 @@ async function startVoice() {
   room = new LK.Room({ adaptiveStream: true, dynacast: true });
 
   room.registerTextStreamHandler("lk.transcription", async (reader, participant) => {
+    $("transcript").querySelector('[data-seg="connecting"]')?.remove();
     const role = participant.identity === room.localParticipant.identity ? "user" : "assistant";
     const seg = reader.info.attributes?.["lk.segment_id"] || reader.info.id;
     let text = "";
@@ -99,10 +106,12 @@ async function startVoice() {
   room.on(LK.RoomEvent.ParticipantAttributesChanged, (changed, p) => {
     const state = changed["lk.agent.state"];
     if (!state || p === room.localParticipant) return;
-    setStatus({ listening: "Listening", thinking: "Thinking…", speaking: "Speaking", initializing: "Agent joining…" }[state] || state, true);
+    setAgentState(state);
+    setStatus({ listening: "Listening", thinking: "Thinking", speaking: "Speaking", initializing: "Agent joining" }[state] || state, true);
   });
   room.on(LK.RoomEvent.Disconnected, () => {
     $("voice-controls").hidden = true;
+    setAgentState("idle");
     if (!gotResult) pollResult();
   });
 
@@ -118,13 +127,15 @@ async function startVoice() {
 
   show("live");
   $("voice-controls").hidden = false;
-  setStatus("Agent joining…", true);
+  setStatus("Agent joining", true);
+  // The free LiveKit Cloud plan can cold-start the agent (10-20 seconds).
+  addMsg("assistant", "Connecting you to the agent. This can take up to 20 seconds…", "connecting");
 }
 
 // After a call ends without a pushed result (hang-up, network), the agent still
 // saves the partial record. Poll for it.
 async function pollResult() {
-  setStatus("Scoring…");
+  setStatus("Scoring");
   for (let i = 0; i < 20 && !gotResult; i++) {
     const res = await fetch(`/api/rooms/${roomName}/result`);
     if (res.ok) return showResult(await res.json());
@@ -157,6 +168,7 @@ async function startText(notice) {
   const data = await res.json();
   if (!res.ok) return showLimit(data.detail || "The demo is unavailable right now.");
   show("live");
+  $("live-viz").hidden = true;
   $("chat-form").hidden = false;
   $("voice-controls").hidden = true;
   setStatus("Text chat", true);
@@ -194,7 +206,7 @@ document.querySelectorAll("[data-persona]").forEach((btn) => {
         return;
       }
       $("sample-transcript").innerHTML =
-        `<div class="card" style="padding:18px"><b>${esc(rec.persona)} persona</b><div class="small" style="margin:4px 0 12px">${esc(rec.persona_description)}</div>` +
+        `<div class="card" style="padding:18px"><span class="eyebrow">${esc(rec.persona)} persona</span><div class="small" style="margin:4px 0 12px">${esc(rec.persona_description)}</div>` +
         `<div class="transcript" style="max-height:420px">${renderTranscript(rec.transcript)}</div></div>`;
       $("sample-result").innerHTML = renderResult(rec, config.tiers);
     } finally {

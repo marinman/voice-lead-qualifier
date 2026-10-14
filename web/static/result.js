@@ -60,7 +60,7 @@ function renderResult(rec, tiers, opts = {}) {
       ${rec.score == null ? "" : renderBar(rec, tiers)}
       ${renderBreakdown(rec)}
       ${renderNextStep(rec, opts)}
-      <div class="small" style="margin-top:10px">Outcome: <span class="mono">${esc(rec.outcome)}</span>${method} · source <span class="mono">${esc(rec.utm_source)}</span></div>
+      <div class="meta">Outcome: <span class="mono">${esc(rec.outcome)}</span>${method} · source <span class="mono">${esc(rec.utm_source)}</span></div>
     </div>`;
 }
 
@@ -77,7 +77,7 @@ document.addEventListener("submit", async (e) => {
     body: JSON.stringify({ conversation_id: form.dataset.cid, email: input.value }),
   });
   if (res.ok) {
-    form.replaceWith(Object.assign(document.createElement("div"), { className: "small", textContent: "✓ Saved. The recap is on its way (demo: saved to the nurture table, no email sent)." }));
+    form.replaceWith(Object.assign(document.createElement("div"), { className: "small", textContent: "Saved. The recap is on its way. (Demo: saved to the nurture table, no email sent.)" }));
     if (msg) msg.remove();
   } else {
     const err = await res.json().catch(() => ({}));

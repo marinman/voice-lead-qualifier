@@ -1,0 +1,40 @@
+# Render Blueprint: the public web app (landing page, token endpoint, text chat,
+# reviewer mode, private dashboard). The voice agent runs on LiveKit Cloud and the
+# database on Turso, so this service keeps no state on disk.
+services:
+  - type: web
+    name: voice-lead-qualifier
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: uvicorn web.server:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      # Secrets: Render asks for these when you create the Blueprint.
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DASHBOARD_TOKEN
+        generateValue: true
+      # Guardrails. Change in the Render dashboard (Environment); saving restarts
+      # the service without a code deploy.
+      - key: DEMO_ENABLED
+        value: "true"
+      - key: MAX_SESSIONS_PER_DAY
+        value: "20"
+      - key: MAX_SESSIONS_PER_IP_PER_DAY
+        value: "5"
+      - key: MAX_SESSION_SECONDS
+        value: "300"

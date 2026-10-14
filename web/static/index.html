@@ -4,45 +4,55 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Voice AI Readiness Assessment</title>
+  <meta name="description" content="A three-minute voice assessment for teams shipping a voice AI agent. Unofficial concept demo built on LiveKit.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+  <div class="announce">Unofficial concept demo built on LiveKit <span>· not affiliated with or endorsed by LiveKit</span></div>
   <div class="wrap">
     <nav class="nav">
-      <div class="brand"><span class="brand-mark"></span>Voice AI Readiness</div>
-      <a href="#reviewer">Reviewer mode ↓</a>
+      <a class="brand" href="/"><span class="brand-mark"><i></i></span>Voice AI Readiness <span class="tag">Built on LiveKit Agents</span></a>
+      <div class="nav-actions">
+        <a class="btn ghost" href="#reviewer">Reviewer mode</a>
+        <a class="btn primary" href="#widget">Start assessment</a>
+      </div>
     </nav>
 
     <section class="hero">
       <div>
-        <div class="eyebrow">Free · 3 minutes · Out loud</div>
-        <h1>Shipping a voice agent? Find out how ready you are.</h1>
-        <p class="lede">Talk to our AI assistant for three minutes. It asks five quick questions and tells you the fastest next step for your team, whether that's a working session with an engineer or the right guide to start building.</p>
-        <ul class="bullets">
-          <li><span class="ic">⚡</span><div><b>A straight answer in 3 minutes</b><span>No forms, no sales call to find out where you stand.</span></div></li>
-          <li><span class="ic">🎯</span><div><b>A next step sized to your project</b><span>Production launch, pilot, or just exploring: you get a different path.</span></div></li>
-          <li><span class="ic">🎙️</span><div><b>Hear realtime voice AI firsthand</b><span>The assessment itself runs on a live voice agent. Judge the latency yourself.</span></div></li>
+        <div class="eyebrow">Voice AI readiness assessment</div>
+        <h1>Shipping a <span class="hl">voice agent</span>? Find out how ready you are.</h1>
+        <p class="lede">Talk to our AI assistant for three minutes. It asks five quick questions, then gives you the fastest next step for your team, whether that's a working session with an engineer or the right guide to start building.</p>
+        <ul class="features">
+          <li><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>A straight answer in 3 minutes.</b> No forms, and no sales call just to find out where you stand.</div></li>
+          <li><svg viewBox="0 0 24 24"><path d="M4 12h10M10 6l6 6-6 6M20 5v14"/></svg><div><b>A next step sized to your project.</b> A production launch, a pilot, and just exploring each get a different path.</div></li>
+          <li><svg viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/></svg><div><b>Hear realtime voice AI firsthand.</b> The assessment itself runs on a live voice agent, so you can judge the latency yourself.</div></li>
         </ul>
         <span class="chip" id="utm-chip"></span>
       </div>
 
-      <div class="card widget" id="widget">
+      <div class="card widget" id="widget" data-state="idle">
         <div class="widget-head">
-          <h2>Readiness assessment</h2>
+          <span class="eyebrow">Readiness assessment</span>
           <span class="status"><span class="dot" id="dot"></span><span id="status-text">Ready</span></span>
         </div>
 
         <div id="view-idle" class="idle">
-          <button class="orb" id="talk-btn">Talk</button>
-          <div class="small">Tap to start. We'll ask for mic access. Calls end after <span id="max-min">5</span> minutes.</div>
+          <div class="viz" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          <button class="btn primary lg" id="talk-btn">Start talking</button>
+          <div class="small">We'll ask for mic access. Calls end after <span id="max-min">5</span> minutes.</div>
           <div id="voice-note" class="note" hidden>
-            <b>Voice not configured.</b> LiveKit keys are missing from <code>.env</code>, so the live voice agent is off. The text chat and reviewer mode below still run the full scoring and routing.
+            <b>Voice isn't configured.</b> LiveKit keys are missing, so the live voice agent is off. Text chat and reviewer mode still run the full scoring and routing.
           </div>
           <div id="limit-note" class="note" hidden></div>
           <div class="small">Prefer typing? <button class="linkbtn" id="text-btn">Use text chat</button></div>
         </div>
 
         <div id="view-live" hidden style="flex:1;display:flex;flex-direction:column">
+          <div class="viz sm" id="live-viz" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
           <div class="transcript" id="transcript" aria-live="polite"></div>
           <form class="chat-form" id="chat-form" hidden>
             <input id="chat-input" autocomplete="off" placeholder="Type your answer…" aria-label="Your answer">
@@ -61,11 +71,11 @@
     <section class="section" id="reviewer">
       <div class="eyebrow">Reviewer mode</div>
       <h2>Watch the system work without talking to it</h2>
-      <p class="small" style="max-width:46em">Each button loads a recorded sample transcript from <code>/fixtures</code>, then runs the real extraction and the deterministic scoring rubric on it live, saves the record, and shows the same result card a visitor would see.</p>
+      <p class="lede" style="font-size:16px">Each button loads a recorded sample conversation. It then runs the real extraction and the deterministic scoring rubric on it live, and shows the same result card a visitor would see.</p>
       <div class="persona-btns">
-        <button class="btn" data-persona="hot">🔥 Hot persona</button>
-        <button class="btn" data-persona="warm">🌤 Warm persona</button>
-        <button class="btn" data-persona="low">🌱 Low persona</button>
+        <button class="btn" data-persona="hot" style="--c:var(--hot)">Hot lead</button>
+        <button class="btn" data-persona="warm" style="--c:var(--warm)">Warm lead</button>
+        <button class="btn" data-persona="low" style="--c:var(--low)">Low lead</button>
       </div>
       <div class="reviewer-grid">
         <div id="sample-transcript"><div class="empty">Pick a persona to load its transcript.</div></div>
@@ -73,7 +83,10 @@
       </div>
     </section>
 
-    <footer>Demo build for a portfolio. Not an official LiveKit page. Booking and resource links are placeholders configured in <code>config/links.yaml</code>.</footer>
+    <footer>
+      <span>Unofficial concept demo built with LiveKit Agents and LiveKit Cloud for a portfolio. Not affiliated with or endorsed by LiveKit.</span>
+      <span>Booking and resource links are placeholders.</span>
+    </footer>
   </div>
 
   <script src="/static/vendor/livekit-client.umd.js"></script>

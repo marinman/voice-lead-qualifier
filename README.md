@@ -2,7 +2,9 @@
 
 A voice AI SDR on a landing page. It qualifies visitors out loud, scores them against a transparent rubric, routes them to a meeting, nurture, or self-serve, and attributes every conversation to its campaign.
 
-It's built on **LiveKit Agents** (Python) and **LiveKit Cloud**, with a FastAPI token server, plain HTML/JS frontend, and SQLite.
+It's built on **LiveKit Agents** (Python) and **LiveKit Cloud**, with a FastAPI token server, plain HTML/JS frontend, and SQLite (Turso in production). It deploys for free: the agent on LiveKit Cloud, the web app on Render, and the database on Turso.
+
+The UI borrows livekit.com's visual language (dark canvas, light display type, cyan accent, mono labels) so it reads as a LiveKit-native concept. It's clearly labeled as an unofficial demo, not affiliated with LiveKit.
 
 - **Landing page** (`/`): the Voice AI Readiness Assessment. Talk to the agent, watch a live transcript, and get a result card (tier, score, breakdown, next step).
 - **Dashboard** (`/dashboard/<DASHBOARD_TOKEN>`, private): funnel tiles, hot rate by source and campaign, every conversation with its transcript and points per rubric line.
@@ -17,7 +19,7 @@ flowchart LR
   P <-->|WebRTC audio +<br/>live transcript| LK[(LiveKit Cloud)]
   LK <--> A[Agent worker<br/>STT · LLM · TTS]
   A -->|finish_qualification| Q[extract → score → route]
-  Q --> DB[(SQLite)]
+  Q --> DB[(SQLite / Turso)]
   A -->|lead_result text stream| P
   DB --> D[Dashboard]
   P -. mic denied .-> T[Text fallback] --> Q
@@ -59,47 +61,77 @@ Get keys from a free [LiveKit Cloud](https://cloud.livekit.io) project (Settings
 .venv/bin/python -m pytest -q
 ```
 
-## Deploy (one public HTTPS URL)
+## Deploy (free: one public HTTPS URL)
 
-The deliverable is a single public link, so nothing runs on your machine at review time. One **Fly.io** app runs everything: the page, the token endpoint, the private dashboard, and the agent worker. A persistent volume holds SQLite. [`start.sh`](start.sh) runs uvicorn and the worker side by side, so both write to the same database file. LiveKit Cloud provides the `wss://` URL, and the browser connects to it directly.
+The deliverable is a single public link, so nothing runs on your machine at review time. The app is split across three free tiers:
+
+| Part | Host | Free tier |
+|---|---|---|
+| Voice agent | **LiveKit Cloud** (agent hosting) | Build plan: 1,000 agent minutes/month, 5 concurrent calls, 1 deployment |
+| Web app (page, token endpoint, text chat, dashboard) | **Render** free web service | 512 MB. Sleeps after 15 idle minutes, so keep it awake (step 4) |
+| Database | **Turso** (hosted SQLite) | Free plan, more than enough for this demo |
+
+The web app and the agent run on different machines, so they share the Turso database over HTTPS (`TURSO_DATABASE_URL`). Locally, without that variable, everything uses `data/leads.db`.
+
+**1. Database (Turso)**
 
 ```bash
-brew install flyctl
-fly auth login
-fly launch --no-deploy --copy-config      # pick a unique app name; keep fly.toml
-fly volumes create vlq_data --size 1 --region iad
-fly secrets set \
-  LIVEKIT_URL=wss://<project>.livekit.cloud \
-  LIVEKIT_API_KEY=<key> LIVEKIT_API_SECRET=<secret> \
-  OPENAI_API_KEY=<key> \
-  DASHBOARD_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
-fly deploy
+brew install tursodatabase/tap/turso
+turso auth signup                       # or: turso auth login
+turso db create voice-lead-qualifier
+turso db show voice-lead-qualifier --url        # -> TURSO_DATABASE_URL (libsql://...)
+turso db tokens create voice-lead-qualifier     # -> TURSO_AUTH_TOKEN
 ```
 
-Paste `https://<app>.fly.dev` into the application. Keep `https://<app>.fly.dev/dashboard/<DASHBOARD_TOKEN>` for yourself, or share it only with the reviewer. (`fly secrets list` shows names only, so save the token when you generate it.)
+Tables are created automatically on first use.
 
-All secrets live in Fly's secret store. The repo only ships [`.env.example`](.env.example) with variable names. A custom domain is optional (`fly certs add`).
+**2. Voice agent (LiveKit Cloud)**
 
-**Alternative layout:** frontend and token endpoint on Vercel, the agent on LiveKit Cloud Agents, and the database on Turso. That's more moving parts, and you'd need to swap the SQLite calls in `qualifier/storage.py` for libSQL.
+Create a free project at [cloud.livekit.io](https://cloud.livekit.io), then from this folder run:
+
+```bash
+brew install livekit-cli
+lk cloud auth                                   # links the CLI to your project
+cat > .env.agent <<'ENV'
+TURSO_DATABASE_URL=libsql://...
+TURSO_AUTH_TOKEN=...
+OPENAI_API_KEY=...                              # optional: LLM extraction
+ENV
+lk agent create --secrets-file=.env.agent       # builds the Dockerfile, deploys, writes livekit.toml
+```
+
+LiveKit Cloud injects `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` itself. After a code change, run `lk agent deploy`. To change secrets, run `lk agent update-secrets --secrets-file=.env.agent`. `.env.agent` is gitignored and excluded from the build.
+
+On the free plan the agent can shut down between calls, so the first caller after a quiet spell may wait 10–20 seconds for it to join. The page says so while it connects.
+
+**3. Web app (Render)**
+
+Push this repo to GitHub (it's already there), then in Render: **New → Blueprint**, pick the repo, and Render reads [`render.yaml`](render.yaml). It asks for the secrets: the three `LIVEKIT_*` values from your LiveKit project (Settings → API keys), the two `TURSO_*` values, and optionally `OPENAI_API_KEY`. It generates `DASHBOARD_TOKEN` for you. Every push to `main` redeploys.
+
+**4. Keep it awake.** Render's free tier sleeps after 15 idle minutes, and the next visitor then waits 30–60 seconds. Create a free [UptimeRobot](https://uptimerobot.com) HTTP monitor on `https://<app>.onrender.com/healthz` every 5 minutes. One always-on service fits within Render's 750 free hours a month.
+
+**5. Share.** Paste `https://<app>.onrender.com` into the application. Your private dashboard is `https://<app>.onrender.com/dashboard/<DASHBOARD_TOKEN>` (Render → Environment shows the generated value). A custom domain is optional.
+
+Secrets live in Render's and LiveKit Cloud's secret settings only. The repo ships [`.env.example`](.env.example) with variable names.
 
 ### Cost guardrails
 
-The link is public, so strangers can start sessions. Every limit is an environment variable. Change one with `fly secrets set NAME=value`, which restarts the machine but doesn't rebuild the code.
+The link is public, so strangers can start sessions. Every limit is an environment variable on the Render service (Environment tab). Saving restarts the service without a code deploy. `render.yaml` ships a daily cap of 20.
 
 | Guardrail | Default | How it's enforced |
 |---|---|---|
 | Kill switch | `DEMO_ENABLED=true` | `false` makes the token and text-chat endpoints refuse new sessions. The page shows "paused", and reviewer mode keeps working |
 | Max call length | `MAX_SESSION_SECONDS=300` | The agent wraps up, scores, and hangs up at 5 minutes. Text chat closes on the next message after the limit |
-| Sessions per day | `MAX_SESSIONS_PER_DAY=50` | Counted in SQLite across voice and text, UTC day. Over the cap returns 429 with a friendly message |
-| Sessions per visitor | `MAX_SESSIONS_PER_IP_PER_DAY=5` | Per client IP (`Fly-Client-IP`), stored as a hash |
+| Sessions per day | `MAX_SESSIONS_PER_DAY=20` (code default 50) | Counted in SQLite across voice and text, UTC day. Over the cap returns 429 with a friendly message |
+| Sessions per visitor | `MAX_SESSIONS_PER_IP_PER_DAY=5` | Per client IP (from `X-Forwarded-For`), stored as a hash |
 | Reviewer samples | `MAX_SAMPLES_PER_IP_PER_DAY=30` | Samples cost at most one extraction call each |
 | Room hygiene | built in | Tokens expire in 5 minutes, rooms allow 2 participants and close 60s after emptying |
 
 **Set hard spend limits at the providers too, because the code can't do that part:**
-- **LiveKit Cloud:** STT, LLM, and TTS bill here through LiveKit Inference. Stay on the free/Build plan, or set a usage limit in the project's billing settings.
+- **LiveKit Cloud:** agent minutes and STT, LLM, and TTS (through LiveKit Inference) bill here. Staying on the free Build plan with no payment method is the simplest hard cap. If you upgrade, set a usage limit in billing.
 - **OpenAI** (extraction, or `AGENT_PROVIDER=openai`): use a dedicated project key with a monthly budget limit under Settings → Limits.
 
-Pause the demo instantly with `fly secrets set DEMO_ENABLED=false`.
+Pause the demo by setting `DEMO_ENABLED=false` in Render's Environment tab. The call-length cap (`MAX_SESSION_SECONDS`) is enforced by the agent, so set it as an agent secret if you change it.
 
 ### Dashboard access
 
@@ -115,7 +147,7 @@ The dashboard is served only at `/dashboard/<DASHBOARD_TOKEN>`, and its API need
 
 ## Scoring
 
-The rubric lives in [`config/scoring.yaml`](config/scoring.yaml). The file is re-read on every score, so a marketer can change a weight and the **next** conversation uses it, with no code change and no restart. (On Fly the file ships in the image, so an edit goes live with `fly deploy`. It's still a config-only change.) The LLM only extracts answers. The points come from plain rules ([`qualifier/scoring.py`](qualifier/scoring.py)), so every score breaks down line by line. The reasoning for each line is in [`campaign/scoring-rubric.md`](campaign/scoring-rubric.md).
+The rubric lives in [`config/scoring.yaml`](config/scoring.yaml). The file is re-read on every score, so a marketer can change a weight and the **next** conversation uses it, with no code change and no restart. (In production the file ships with the code, so an edit goes live on the next push: Render redeploys automatically, and `lk agent deploy` updates the agent. It's still a config-only change.) The LLM only extracts answers. The points come from plain rules ([`qualifier/scoring.py`](qualifier/scoring.py)), so every score breaks down line by line. The reasoning for each line is in [`campaign/scoring-rubric.md`](campaign/scoring-rubric.md).
 
 | Tier | Score | Outcome | UI |
 |---|---|---|---|
@@ -138,7 +170,7 @@ The rubric lives in [`config/scoring.yaml`](config/scoring.yaml). The file is re
 
 ## Data model
 
-There's one row per conversation in `data/leads.db`, created at runtime:
+There's one row per conversation in `data/leads.db` locally, or in Turso in production (same schema, created at runtime):
 `id, created_at, duration_seconds, channel, room_name, transcript (JSON), extracted (JSON), extraction_method, score, tier, outcome, score_breakdown (JSON), utm_source, utm_medium, utm_campaign, incomplete, needs_review, end_reason`. Captured emails go in a `nurture` table, and session starts for the guardrails go in a `usage` table (hashed IPs only).
 
 ## Layout
@@ -152,8 +184,9 @@ config/               scoring.yaml · faq.md · links.yaml   ← marketer-editab
 fixtures/             Hot / Warm / Low sample transcripts for reviewer mode
 campaign/             brief.md · scoring-rubric.md · emails/
 tests/                acceptance checks (no keys needed)
-Dockerfile, fly.toml  one-app Fly.io deploy (web + agent + volume)
-start.sh              container entrypoint: uvicorn + agent worker
+Dockerfile            agent image for LiveKit Cloud (lk agent create / deploy)
+render.yaml           Render Blueprint for the web app (free plan)
+requirements-web.txt  slim dependencies for the web app
 data/                 SQLite, created at runtime
 ```
 

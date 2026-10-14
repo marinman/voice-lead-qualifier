@@ -1,8 +1,13 @@
 .venv
 .env
+.env.*
 .git
 .claude
-data/*.db*
+data
 __pycache__
 .pytest_cache
 tests
+web
+campaign
+fixtures
+README.md

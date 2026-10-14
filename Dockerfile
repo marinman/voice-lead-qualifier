@@ -1,22 +1,25 @@
-# One image runs both the web server (page + token endpoint + dashboard) and the
-# LiveKit agent worker, so they share the SQLite file on the mounted volume.
-FROM python:3.12-slim
+# Agent image for LiveKit Cloud (`lk agent create` / `lk agent deploy` build this).
+# Based on LiveKit's pip Dockerfile template. The web server is deployed
+# separately (Render, see render.yaml) and doesn't use this file.
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim
 
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PORT=8080 \
-    VLQ_DATA_DIR=/data
+    PIP_NO_CACHE_DIR=1
 
-WORKDIR /app
+# Unprivileged user, as in LiveKit's template.
+RUN useradd --create-home --uid 10001 appuser
+WORKDIR /home/appuser/app
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+COPY --chown=appuser:appuser . .
+USER appuser
 
 # Bake model weights (VAD, turn-detector fallback) into the image.
 RUN python agent/agent.py download-files
 
-RUN chmod +x start.sh
-EXPOSE 8080
-CMD ["./start.sh"]
+# LiveKit Cloud injects LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET.
+# `start` = production mode: connect to LiveKit and wait for dispatches.
+CMD ["python", "agent/agent.py", "start"]

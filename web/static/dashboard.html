@@ -6,13 +6,16 @@
   <meta name="referrer" content="no-referrer">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Lead Funnel Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:wght@300;400;500;600&display=swap">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <div class="wrap">
     <nav class="nav">
-      <div class="brand"><span class="brand-mark"></span>Voice AI Readiness</div>
-      <a href="/">← Assessment page</a>
+      <a class="brand" href="/"><span class="brand-mark"><i></i></span>Voice AI Readiness <span class="tag">Private dashboard</span></a>
+      <div class="nav-actions"><a class="btn" href="/">Assessment page</a></div>
     </nav>
 
     <div class="toolbar">
@@ -21,7 +24,7 @@
         <h1>Voice qualification dashboard</h1>
         <div class="small">Every conversation, scored against <code>config/scoring.yaml</code>. Refreshes every 5 seconds.</div>
       </div>
-      <label class="small"><input type="checkbox" id="samples" checked> Include reviewer samples</label>
+      <label class="check"><input type="checkbox" id="samples" checked> Include reviewer samples</label>
     </div>
 
     <div class="tiles" id="tiles"></div>

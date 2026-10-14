@@ -18,7 +18,7 @@ AUTH = {"X-Dashboard-Token": DASH}
 @pytest.fixture(autouse=True)
 def tmp_env(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", tmp_path / "leads.db")
-    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
     monkeypatch.setenv("EXTRACTION_MODE", "rules")
     monkeypatch.setenv("DASHBOARD_TOKEN", DASH)
     for k in ("DEMO_ENABLED", "MAX_SESSIONS_PER_DAY", "MAX_SESSIONS_PER_IP_PER_DAY", "MAX_SESSION_SECONDS"):
@@ -167,3 +167,55 @@ def test_text_session_time_limit(client, monkeypatch):
     monkeypatch.setenv("MAX_SESSION_SECONDS", "0")
     r = client.post("/api/text/message", json={"session_id": s["session_id"], "text": "A pilot"}).json()
     assert r["done"] and r["result"]["end_reason"] == "time_limit" and r["result"]["incomplete"]
+
+
+def test_turso_backend_end_to_end(client, monkeypatch, tmp_path):
+    """Drive the real TursoDB client against a fake /v2/pipeline server backed by SQLite,
+    following Turso's documented request/response JSON."""
+    import sqlite3
+
+    import httpx
+
+    fake = sqlite3.connect(tmp_path / "fake-turso.db", check_same_thread=False)
+    seen = {}
+
+    def to_py(a):
+        return None if a["type"] == "null" else int(a["value"]) if a["type"] == "integer" else a["value"]
+
+    def to_cell(v):
+        if v is None:
+            return {"type": "null"}
+        if isinstance(v, int):
+            return {"type": "integer", "value": str(v)}
+        return {"type": "text", "value": v}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        seen["url"], seen["auth"] = url, headers["Authorization"]
+        assert json["requests"][-1] == {"type": "close"}
+        results = []
+        for req in json["requests"][:-1]:
+            cur = fake.execute(req["stmt"]["sql"], [to_py(a) for a in req["stmt"]["args"]])
+            cols = [{"name": d[0], "decltype": None} for d in (cur.description or [])]
+            rows = [[to_cell(v) for v in r] for r in cur.fetchall()]
+            results.append({"type": "ok", "response": {"type": "execute", "result": {
+                "cols": cols, "rows": rows, "affected_row_count": max(cur.rowcount, 0), "last_insert_rowid": None}}})
+        fake.commit()
+        results.append({"type": "ok", "response": {"type": "close"}})
+        return httpx.Response(200, json={"baton": None, "base_url": None, "results": results},
+                              request=httpx.Request("POST", url))
+
+    monkeypatch.setattr(storage.httpx, "post", fake_post)
+    monkeypatch.setenv("TURSO_DATABASE_URL", "libsql://vlq-demo.turso.io")
+    monkeypatch.setenv("TURSO_AUTH_TOKEN", "tok")
+    monkeypatch.setenv("MAX_SESSIONS_PER_IP_PER_DAY", "1")
+
+    hot = client.post("/api/samples/hot").json()
+    assert hot["score"] == 100 and hot["transcript"][0]["role"] == "assistant"
+    warm = client.post("/api/samples/warm").json()
+    assert client.post("/api/nurture", json={"conversation_id": warm["id"], "email": "a@b.co"}).status_code == 200
+    assert client.post("/api/text/start", json={}).status_code == 200
+    assert client.post("/api/text/start", json={}).status_code == 429  # per-IP cap enforced via Turso
+    stats = client.get("/api/conversations", headers=AUTH).json()["stats"]
+    assert stats["total"] == 2 and stats["nurture_emails"] == 1 and stats["sessions_today"] == 1
+    assert seen["url"] == "https://vlq-demo.turso.io/v2/pipeline" and seen["auth"] == "Bearer tok"
+    assert fake.execute("SELECT COUNT(*) FROM conversations").fetchone()[0] == 2

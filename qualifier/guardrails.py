@@ -56,44 +56,41 @@ def start_session(kind: str, ip: str) -> None:
     """Check the caps and record a new session start. kind: voice | text | sample.
 
     Voice and text share the global daily cap and the per-IP cap. Reviewer samples
-    cost at most one extraction call, so they only get a per-IP cap.
+    cost at most one extraction call, so they only get a per-IP cap. The check and
+    the insert are one conditional INSERT, so it's atomic on SQLite and Turso.
     """
     if kind != "sample" and not demo_enabled():
         raise GuardrailError("The live demo is paused right now. Reviewer mode below still works.", 503)
     lim = limits()
     ip_h = _ip_hash(ip)
     since = _today_start()
-    with storage.connect() as c:
-        c.execute("BEGIN IMMEDIATE")
-        if kind == "sample":
-            n_ip = c.execute(
-                "SELECT COUNT(*) FROM usage WHERE kind = 'sample' AND ip_hash = ? AND created_at >= ?",
-                (ip_h, since),
-            ).fetchone()[0]
-            if n_ip >= lim["max_samples_per_ip_per_day"]:
-                raise GuardrailError("You've run a lot of samples today. Try again tomorrow.")
-        else:
-            total = c.execute(
-                "SELECT COUNT(*) FROM usage WHERE kind != 'sample' AND created_at >= ?", (since,)
-            ).fetchone()[0]
-            if total >= lim["max_sessions_per_day"]:
-                raise GuardrailError(
-                    "The demo has hit today's session limit. Reviewer mode below still shows the full system."
-                )
-            n_ip = c.execute(
-                "SELECT COUNT(*) FROM usage WHERE kind != 'sample' AND ip_hash = ? AND created_at >= ?",
-                (ip_h, since),
-            ).fetchone()[0]
-            if n_ip >= lim["max_sessions_per_ip_per_day"]:
-                raise GuardrailError("You've reached today's limit for live sessions. Reviewer mode still works.")
-        c.execute(
-            "INSERT INTO usage (kind, ip_hash, created_at) VALUES (?, ?, ?)",
-            (kind, ip_h, storage.now_iso()),
+    now = storage.now_iso()
+    if kind == "sample":
+        inserted = storage.execute(
+            """INSERT INTO usage (kind, ip_hash, created_at)
+               SELECT ?, ?, ? WHERE (SELECT COUNT(*) FROM usage
+                   WHERE kind = 'sample' AND ip_hash = ? AND created_at >= ?) < ?""",
+            [kind, ip_h, now, ip_h, since, lim["max_samples_per_ip_per_day"]],
         )
+        if not inserted:
+            raise GuardrailError("You've run a lot of samples today. Try again tomorrow.")
+        return
+    inserted = storage.execute(
+        """INSERT INTO usage (kind, ip_hash, created_at)
+           SELECT ?, ?, ?
+           WHERE (SELECT COUNT(*) FROM usage WHERE kind != 'sample' AND created_at >= ?) < ?
+             AND (SELECT COUNT(*) FROM usage WHERE kind != 'sample' AND ip_hash = ? AND created_at >= ?) < ?""",
+        [kind, ip_h, now, since, lim["max_sessions_per_day"], ip_h, since, lim["max_sessions_per_ip_per_day"]],
+    )
+    if not inserted:
+        if sessions_today() >= lim["max_sessions_per_day"]:
+            raise GuardrailError(
+                "The demo has hit today's session limit. Reviewer mode below still shows the full system."
+            )
+        raise GuardrailError("You've reached today's limit for live sessions. Reviewer mode still works.")
 
 
 def sessions_today() -> int:
-    with storage.connect() as c:
-        return c.execute(
-            "SELECT COUNT(*) FROM usage WHERE kind != 'sample' AND created_at >= ?", (_today_start(),)
-        ).fetchone()[0]
+    return storage.query(
+        "SELECT COUNT(*) AS n FROM usage WHERE kind != 'sample' AND created_at >= ?", [_today_start()]
+    )[0]["n"]
