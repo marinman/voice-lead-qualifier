@@ -24,8 +24,7 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
+      # Optional: add OPENAI_API_KEY later in Environment for LLM extraction.
       - key: DASHBOARD_TOKEN
         generateValue: true
       # Guardrails. Change in the Render dashboard (Environment); saving restarts
