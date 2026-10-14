@@ -160,6 +160,20 @@ def backend() -> str:
     return "turso" if _env("TURSO_DATABASE_URL") else "sqlite"
 
 
+def config_fingerprint() -> dict:
+    """Non-secret clues for debugging a misconfigured host: the database hostname,
+    and the token's length plus a short one-way hash (not reversible)."""
+    import hashlib
+    from urllib.parse import urlparse
+
+    tok = _env("TURSO_AUTH_TOKEN")
+    return {
+        "db_host": urlparse(_env("TURSO_DATABASE_URL").replace("libsql://", "https://")).hostname,
+        "token_len": len(tok),
+        "token_sha8": hashlib.sha256(tok.encode()).hexdigest()[:8] if tok else None,
+    }
+
+
 def _db():
     url = _env("TURSO_DATABASE_URL")
     db = TursoDB(url, _env("TURSO_AUTH_TOKEN")) if url else SQLiteDB(DB_PATH)

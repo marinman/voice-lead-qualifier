@@ -106,7 +106,8 @@ def healthz(deep: bool = False):
     except Exception as e:
         status = getattr(getattr(e, "response", None), "status_code", None)
         return JSONResponse(
-            {"ok": False, "db": storage.backend(), "error": type(e).__name__, "http_status": status},
+            {"ok": False, "db": storage.backend(), "error": type(e).__name__, "http_status": status,
+             **storage.config_fingerprint()},
             status_code=503,
         )
 
