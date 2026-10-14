@@ -1,0 +1,19 @@
+{
+  "persona": "Low",
+  "description": "Student-founder of a 3-person side project, curious about voice AI, no timeline.",
+  "utm": {"utm_source": "reddit", "utm_medium": "organic_social", "utm_campaign": "voice-ai-readiness-q4"},
+  "duration_seconds": 142,
+  "transcript": [
+    {"role": "assistant", "text": "Hi, I'm an AI assistant running a short qualification chat for the Voice AI Readiness Assessment. It takes about three minutes. What are you looking to build or improve with voice AI?"},
+    {"role": "user", "text": "Nothing specific yet, I'm just curious and learning how voice agents work."},
+    {"role": "assistant", "text": "Exploring and learning, great. Roughly how many people are at your company?"},
+    {"role": "user", "text": "It's just me and two friends, so three."},
+    {"role": "assistant", "text": "A team of three, got it. When are you hoping to have something live?"},
+    {"role": "user", "text": "No real timeline, just exploring for now."},
+    {"role": "assistant", "text": "No rush, understood. What are you using today: building in-house, another provider, or starting from zero?"},
+    {"role": "user", "text": "Starting from zero, haven't built anything."},
+    {"role": "assistant", "text": "Starting fresh. And what is your role on the team?"},
+    {"role": "user", "text": "I'm a developer, I write the code."},
+    {"role": "assistant", "text": "Thanks, that's everything I need."}
+  ]
+}

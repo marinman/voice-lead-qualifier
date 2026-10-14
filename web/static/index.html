@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice AI Readiness Assessment</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav">
+      <div class="brand"><span class="brand-mark"></span>Voice AI Readiness</div>
+      <a href="/dashboard">Funnel dashboard →</a>
+    </nav>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Free · 3 minutes · Out loud</div>
+        <h1>Shipping a voice agent? Find out how ready you are.</h1>
+        <p class="lede">Talk to our AI assistant for three minutes. It asks five quick questions and tells you the fastest next step for your team, whether that's a working session with an engineer or the right guide to start building.</p>
+        <ul class="bullets">
+          <li><span class="ic">⚡</span><div><b>A straight answer in 3 minutes</b><span>No forms, no sales call to find out where you stand.</span></div></li>
+          <li><span class="ic">🎯</span><div><b>A next step sized to your project</b><span>Production launch, pilot, or just exploring: you get a different path.</span></div></li>
+          <li><span class="ic">🎙️</span><div><b>Hear realtime voice AI firsthand</b><span>The assessment itself runs on a live voice agent. Judge the latency yourself.</span></div></li>
+        </ul>
+        <span class="chip" id="utm-chip"></span>
+      </div>
+
+      <div class="card widget" id="widget">
+        <div class="widget-head">
+          <h2>Readiness assessment</h2>
+          <span class="status"><span class="dot" id="dot"></span><span id="status-text">Ready</span></span>
+        </div>
+
+        <div id="view-idle" class="idle">
+          <button class="orb" id="talk-btn">Talk</button>
+          <div class="small">Tap to start. We'll ask for mic access.</div>
+          <div id="voice-note" class="note" hidden>
+            <b>Voice not configured.</b> LiveKit keys are missing from <code>.env</code>, so the live voice agent is off. The text chat and reviewer mode below still run the full scoring and routing.
+          </div>
+          <div class="small">Prefer typing? <button class="linkbtn" id="text-btn">Use text chat</button></div>
+        </div>
+
+        <div id="view-live" hidden style="flex:1;display:flex;flex-direction:column">
+          <div class="transcript" id="transcript" aria-live="polite"></div>
+          <form class="chat-form" id="chat-form" hidden>
+            <input id="chat-input" autocomplete="off" placeholder="Type your answer…" aria-label="Your answer">
+            <button class="btn primary" type="submit">Send</button>
+          </form>
+          <div class="controls" id="voice-controls" hidden>
+            <button class="btn" id="mute-btn">Mute</button>
+            <button class="btn danger" id="end-btn">End call</button>
+          </div>
+        </div>
+
+        <div id="view-result" hidden></div>
+      </div>
+    </section>
+
+    <section class="section" id="reviewer">
+      <div class="eyebrow">Reviewer mode</div>
+      <h2>Watch the system work without talking to it</h2>
+      <p class="small" style="max-width:46em">Each button loads a recorded sample transcript from <code>/fixtures</code>, then runs the real extraction and the deterministic scoring rubric on it live, saves the record, and shows the same result card a visitor would see.</p>
+      <div class="persona-btns">
+        <button class="btn" data-persona="hot">🔥 Hot persona</button>
+        <button class="btn" data-persona="warm">🌤 Warm persona</button>
+        <button class="btn" data-persona="low">🌱 Low persona</button>
+      </div>
+      <div class="reviewer-grid">
+        <div id="sample-transcript"><div class="empty">Pick a persona to load its transcript.</div></div>
+        <div id="sample-result"></div>
+      </div>
+    </section>
+
+    <footer>Demo build for a portfolio. Not an official LiveKit page. Booking and resource links are placeholders configured in <code>config/links.yaml</code>.</footer>
+  </div>
+
+  <script src="/static/vendor/livekit-client.umd.js"></script>
+  <script src="/static/result.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

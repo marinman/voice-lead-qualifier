@@ -1,0 +1,19 @@
+{
+  "persona": "Hot",
+  "description": "Head of Engineering at a 600-person contact-center software company replacing a vendor, launching this month.",
+  "utm": {"utm_source": "linkedin", "utm_medium": "paid_social", "utm_campaign": "voice-ai-readiness-q4"},
+  "duration_seconds": 174,
+  "transcript": [
+    {"role": "assistant", "text": "Hi, I'm an AI assistant running a short qualification chat for the Voice AI Readiness Assessment. It takes about three minutes. What are you looking to build or improve with voice AI?"},
+    {"role": "user", "text": "We run a contact center platform and we need to ship a production voice agent that handles inbound support calls for our customers. It has to go to real callers."},
+    {"role": "assistant", "text": "Got it, a production support agent for inbound calls. Roughly how many people are at your company?"},
+    {"role": "user", "text": "About 600 people."},
+    {"role": "assistant", "text": "Around 600, thanks. When are you hoping to have something live?"},
+    {"role": "user", "text": "Honestly, in the next three or four weeks. We have a customer launch at the end of the month."},
+    {"role": "assistant", "text": "So within the month. What are you using today: building in-house, another provider, or starting from zero?"},
+    {"role": "user", "text": "We're on another provider right now and we're replacing them because latency is killing us."},
+    {"role": "assistant", "text": "Replacing a current vendor, understood. And what is your role on the team?"},
+    {"role": "user", "text": "I'm the VP of Engineering, I own the budget for this."},
+    {"role": "assistant", "text": "Thanks, that's everything I need."}
+  ]
+}

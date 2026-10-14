@@ -1,0 +1,19 @@
+{
+  "persona": "Warm",
+  "description": "Senior engineer at a 120-person healthtech startup prototyping an intake assistant, aiming for next quarter.",
+  "utm": {"utm_source": "google", "utm_medium": "cpc", "utm_campaign": "voice-agent-framework"},
+  "duration_seconds": 191,
+  "transcript": [
+    {"role": "assistant", "text": "Hi, I'm an AI assistant running a short qualification chat for the Voice AI Readiness Assessment. It takes about three minutes. What are you looking to build or improve with voice AI?"},
+    {"role": "user", "text": "We want to prototype a patient intake assistant, kind of a pilot to see if voice works for our clinics."},
+    {"role": "assistant", "text": "A pilot for patient intake, nice. Roughly how many people are at your company?"},
+    {"role": "user", "text": "We're around 120."},
+    {"role": "assistant", "text": "About 120, got it. When are you hoping to have something live?"},
+    {"role": "user", "text": "Probably in four or five months, sometime next quarter."},
+    {"role": "assistant", "text": "Next quarter, understood. What are you using today: building in-house, another provider, or starting from zero?"},
+    {"role": "user", "text": "We hacked together an in-house thing with some APIs but it's rough."},
+    {"role": "assistant", "text": "Building in-house so far. And what is your role on the team?"},
+    {"role": "user", "text": "I'm a senior software engineer on the platform team."},
+    {"role": "assistant", "text": "Thanks, that's everything I need."}
+  ]
+}

@@ -1,0 +1,10 @@
+# Routing destinations. Placeholders for the demo; swap for real URLs.
+hot:
+  booking_url: "https://cal.example.com/livekit-voice-ai-assessment"
+  cta: "Book a 30-minute architecture session"
+warm:
+  resource_title: "Your Voice AI Readiness recap + build guide"
+  resource_url: "https://docs.livekit.io/agents/"
+low:
+  docs_url: "https://docs.livekit.io/"
+  getting_started_url: "https://docs.livekit.io/agents/start/voice-ai/"

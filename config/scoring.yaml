@@ -1,0 +1,72 @@
+# Lead scoring rubric for the Voice AI Readiness Assessment.
+#
+# Marketers: tune points here. No code changes needed. The next scored
+# conversation picks up your edits (the file is re-read on every score).
+#
+# Each criterion maps an extracted answer (left) to points (right).
+# A missing answer scores 0 for that line. `max` is computed automatically.
+# Plain-language reasoning for every line lives in campaign/scoring-rubric.md.
+
+tiers:
+  hot: 70    # score >= 70  -> Hot  -> offer a meeting
+  warm: 40   # score >= 40  -> Warm -> nurture + email capture
+             # below warm   -> Low  -> self-serve resources
+
+criteria:
+  company_size_band:
+    label: Company size
+    points:
+      "200+": 25
+      "50-199": 20
+      "11-49": 12
+      "1-10": 5
+
+  timeline:
+    label: Timeline
+    points:
+      under_1_month: 25
+      1_3_months: 18
+      3_6_months: 10
+      exploring: 4
+
+  use_case:
+    label: Use case
+    points:
+      production: 25
+      pilot: 15
+      curiosity: 5
+
+  current_stack:
+    label: Current stack
+    points:
+      vendor: 15
+      in_house: 10
+      from_zero: 5
+
+  role_type:
+    label: Role
+    points:
+      decision_maker: 10
+      practitioner: 5
+      unknown: 0
+
+# Human-readable names for the extracted values (used on result cards
+# and the dashboard). Rename freely; keys must match the points above.
+value_labels:
+  "200+": "200+ people"
+  "50-199": "50-199 people"
+  "11-49": "11-49 people"
+  "1-10": "1-10 people"
+  under_1_month: "Under 1 month"
+  1_3_months: "1-3 months"
+  3_6_months: "3-6 months"
+  exploring: "Exploring / 6+ months"
+  production: "Production voice agent"
+  pilot: "Pilot / prototype"
+  curiosity: "Curiosity / research"
+  vendor: "Evaluating or replacing a vendor"
+  in_house: "Building in-house"
+  from_zero: "Starting from zero"
+  decision_maker: "Decision maker"
+  practitioner: "Practitioner"
+  unknown: "Unknown"
